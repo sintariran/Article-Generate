@@ -44,7 +44,7 @@ function generateArticlesWithCombinedKeywords() {
   });
 
   if (articleSheet.getLastRow() === 1) {
-    articleSheet.getRange(1, 1, 1, 7).setValues([['キーワード1', 'キーワード2', 'SEOタイトル', 'メタディスクリプション', 'メタキーワード', '記事', 'チェック']]);
+    articleSheet.getRange(1, 1, 1, 8).setValues([['キーワード1', 'キーワード2', 'SEOタイトル', 'スラッグ', 'メタディスクリプション', 'メタキーワード', '記事', 'チェック']]);
     articleSheet.getRange('G1').insertCheckboxes();    
   }
 
@@ -69,22 +69,28 @@ function generateArticlesWithCombinedKeywords() {
     const progressMessage = `記事を生成しています... (${index + 1}/${totalArticles})`;
     SpreadsheetApp.getActiveSpreadsheet().toast(progressMessage, "記事生成の進捗", 3);
 
-    const article = callAnthropicApi(messages, modelName, logSheet, showProgressToast);
-
+    let article;
+    if (modelName === 'gpt-4o') {
+      article = callOpenAiApi(messages, modelName, logSheet, showProgressToast);
+    } else if (modelName.startsWith('deepseek')) {
+      article = callDeepSeekApi(messages, modelName, logSheet, showProgressToast);
+    } else {
+      article = callAnthropicApi(messages, modelName, logSheet, showProgressToast);
+    }
     // SEOタイトル、メタディスクリプション、メタキーワードを生成
     const seoTitlePrompt = `以下の記事に適した1つの記事タイトルをSEOを踏まえて50文字以内で提案してください:\n\n${article}`;
-    const seoTitle = callAnthropicApi([{ role: 'user', content: seoTitlePrompt }], 'claude-3-haiku-20240307', logSheet);
+    const seoTitle = modelName === 'gpt-4o' ? callOpenAiApi([{ role: 'user', content: seoTitlePrompt }], modelName, logSheet) : (modelName.startsWith('deepseek') ? callDeepSeekApi([{ role: 'user', content: seoTitlePrompt }], modelName, logSheet) : callAnthropicApi([{ role: 'user', content: seoTitlePrompt }], modelName, logSheet));
     const metaDescPrompt = `以下の記事に適したメタディスクリプションを120文字以内で提案してください:\n\n${article}`;
-    const metaDesc = callAnthropicApi([{ role: 'user', content: metaDescPrompt }], 'claude-3-haiku-20240307', logSheet);
+    const metaDesc = modelName === 'gpt-4o' ? callOpenAiApi([{ role: 'user', content: metaDescPrompt }], modelName, logSheet) : (modelName.startsWith('deepseek') ? callDeepSeekApi([{ role: 'user', content: metaDescPrompt }], modelName, logSheet) : callAnthropicApi([{ role: 'user', content: metaDescPrompt }], modelName, logSheet));
     const metaKeywordPrompt = `以下の記事に適したメタキーワードを10個以内、カンマ区切りで提案してください:\n\n${article}`;
-    const metaKeyword = callAnthropicApi([{ role: 'user', content: metaKeywordPrompt }], 'claude-3-haiku-20240307', logSheet);
+    const metaKeyword = modelName === 'gpt-4o' ? callOpenAiApi([{ role: 'user', content: metaKeywordPrompt }], modelName, logSheet) : (modelName.startsWith('deepseek') ? callDeepSeekApi([{ role: 'user', content: metaKeywordPrompt }], modelName, logSheet) : callAnthropicApi([{ role: 'user', content: metaKeywordPrompt }], modelName, logSheet));
     // スラッグを生成
     const slugPrompt = `以下のSEOタイトルから適切なスラッグ(URLに使うスラッグ)を提案してください。結果だけを出力して:\n\n${seoTitle}`;
-    const slug = callAnthropicApi([{ role: 'user', content: slugPrompt }], 'claude-3-haiku-20240307', logSheet);
+    const slug = modelName === 'gpt-4o' ? callOpenAiApi([{ role: 'user', content: slugPrompt }], modelName, logSheet) : (modelName.startsWith('deepseek') ? callDeepSeekApi([{ role: 'user', content: slugPrompt }], modelName, logSheet) : callAnthropicApi([{ role: 'user', content: slugPrompt }], modelName, logSheet));
 
-    articleSheet.getRange(articleSheet.getLastRow() + 1, 1, 1, 8).setValues([[keyword1, keyword2, seoTitle, slug, metaDesc, metaKeyword, article, '']]);
+    // 記事データをシートに追加  
+    articleSheet.appendRow([keyword1, keyword2, seoTitle, slug, metaDesc, metaKeyword, article, '']);
     articleSheet.getRange(articleSheet.getLastRow(), 8).insertCheckboxes();    
   });
-
-  SpreadsheetApp.getActiveSpreadsheet().toast("記事の生成が完了しました。", "記事生成完了", 3);
+  SpreadsheetApp.getActiveSpreadsheet().toast("記事の生成が完了しました。", "完了", 3);
 }
